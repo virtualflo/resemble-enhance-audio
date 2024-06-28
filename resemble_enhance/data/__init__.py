@@ -4,6 +4,7 @@ import random
 from torch.utils.data import DataLoader
 
 from ..hparams import HParams
+from ..utils import DistributedEvalSampler
 from .dataset import Dataset
 from .utils import mix_fg_bg, rglob_audio_files
 
@@ -26,6 +27,16 @@ def _create_datasets(hp: HParams, mode, val_size=10, seed=123):
     return train_ds, val_ds
 
 
+def _get_dataset(path, hp: HParams, mode, seed=123):
+    paths = rglob_audio_files(path)
+
+    random.Random(seed).shuffle(paths)
+    
+    ds = Dataset(paths, hp, training=False,mode=mode)
+    
+    return ds
+
+
 def create_dataloaders(hp: HParams, mode):
     train_ds, val_ds = _create_datasets(hp=hp, mode=mode)
 
@@ -46,3 +57,16 @@ def create_dataloaders(hp: HParams, mode):
         collate_fn=val_ds.collate_fn,
     )
     return train_dl, val_dl
+
+
+def create_dataloader(in_dir, batch_size, mode, device, world_size):
+    ds = _get_dataset(path=in_dir, mode=mode)
+    _sampler = DistributedEvalSampler(ds, num_replicas=world_size, rank=device)
+    dl = DataLoader(
+        ds,
+        batch_size=batch_size,
+        shuffle=True,
+        sampler=_sampler,
+        collate_fn=ds.collate_fn
+    )
+    return dl

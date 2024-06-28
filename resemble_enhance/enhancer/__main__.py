@@ -5,9 +5,10 @@ from pathlib import Path
 
 import torch
 import torchaudio
+import torch.multiprocessing as mp
 from tqdm import tqdm
 
-from .inference import denoise, enhance
+from .inference import denoise, enhance, parallel_denoise, parallel_enhance
 
 
 @torch.inference_mode()
@@ -68,6 +69,16 @@ def main():
         action="store_true",
         help="Shuffle the audio paths and skip the existing ones, enabling multiple jobs to run in parallel",
     )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        help="Batch size per GPU for inference (only in parallel_mode)",
+    )
+    
+    args, _ = parser.parse_known_args()
+
+    if args.parallel_mode and (args.batch_size is None or args.world_size is None):
+        parser.error('--parallel_mode requires --batch_size and --world_size')
 
     args = parser.parse_args()
 
@@ -77,48 +88,59 @@ def main():
         print("CUDA is not available but --device is set to cuda, using CPU instead")
         device = "cpu"
 
+    world_size = torch.cuda.device_count()
+
     start_time = time.perf_counter()
 
     run_dir = args.run_dir
 
-    paths = sorted(args.in_dir.glob(f"**/*{args.suffix}"))
-
     if args.parallel_mode:
-        random.shuffle(paths)
-
-    if len(paths) == 0:
-        print(f"No {args.suffix} files found in the following path: {args.in_dir}")
-        return
-
-    pbar = tqdm(paths)
-
-    for path in pbar:
-        out_path = args.out_dir / path.relative_to(args.in_dir)
-        if args.parallel_mode and out_path.exists():
-            continue
-        pbar.set_description(f"Processing {out_path}")
-        dwav, sr = torchaudio.load(path)
-        dwav = dwav.mean(0)
         if args.denoise_only:
-            hwav, sr = denoise(
-                dwav=dwav,
-                sr=sr,
-                device=device,
-                run_dir=args.run_dir,
-            )
+            def _denoise(rank,world_size):
+                return parallel_denoise(args.in_dir,out_path,"denoiser",args.batch_size,rank,world_size)
+            mp.spawn(_denoise,
+                     args=(world_size, ),
+                     nprocs = world_size)
         else:
-            hwav, sr = enhance(
-                dwav=dwav,
-                sr=sr,
-                device=device,
-                nfe=args.nfe,
-                solver=args.solver,
-                lambd=args.lambd,
-                tau=args.tau,
-                run_dir=run_dir,
-            )
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        torchaudio.save(out_path, hwav[None], sr)
+            def _enhance(rank,world_size):
+                return parallel_enhance(args.in_dir,out_path,"enhancer",args.batch_size,rank,world_size)
+            mp.spawn(_enhance,
+                     args=(world_size, ),
+                     nprocs = world_size)
+    else:
+        paths = sorted(args.in_dir.glob(f"**/*{args.suffix}"))
+
+        if len(paths) == 0:
+            print(f"No {args.suffix} files found in the following path: {args.in_dir}")
+            return
+
+        pbar = tqdm(paths)
+
+        for path in pbar:
+            out_path = args.out_dir / path.relative_to(args.in_dir)
+            pbar.set_description(f"Processing {out_path}")
+            dwav, sr = torchaudio.load(path)
+            dwav = dwav.mean(0)
+            if args.denoise_only:
+                hwav, sr = denoise(
+                    dwav=dwav,
+                    sr=sr,
+                    device=device,
+                    run_dir=args.run_dir,
+                )
+            else:
+                hwav, sr = enhance(
+                    dwav=dwav,
+                    sr=sr,
+                    device=device,
+                    nfe=args.nfe,
+                    solver=args.solver,
+                    lambd=args.lambd,
+                    tau=args.tau,
+                    run_dir=run_dir,
+                )
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            torchaudio.save(out_path, hwav[None], sr)
 
     # Cool emoji effect saying the job is done
     elapsed_time = time.perf_counter() - start_time

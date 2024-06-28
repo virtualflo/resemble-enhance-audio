@@ -2,11 +2,17 @@ import logging
 import time
 
 import torch
+import torchaudio
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+from concurrent.futures import ThreadPoolExecutor
 import torch.nn.functional as F
 from torch.nn.utils.parametrize import remove_parametrizations
 from torchaudio.functional import resample
 from torchaudio.transforms import MelSpectrogram
 from tqdm import trange
+
+from data import create_dataloader
 
 from .hparams import HParams
 
@@ -161,3 +167,25 @@ def inference(model, dwav, sr, device, chunk_seconds: float = 30.0, overlap_seco
     logger.info(f"Elapsed time: {elapsed_time:.3f} s, {hwav.shape[-1] / elapsed_time / 1000:.3f} kHz")
 
     return hwav, sr
+
+
+@torch.inference_mode()
+def parallel_inference(model, in_dir, out_path, mode, batch_size, device, world_size):
+    dist.init_process_group("nccl", rank=device, world_size=world_size)
+    hp: HParams = model.hp
+    ddp_model = DDP(model, device_ids=[device])
+
+    loader = create_dataloader(in_dir,batch_size,mode,device,world_size)
+    results = []
+    def save(out_path,wav,hp):
+        out_path = out_path / wav['path'].relative_to(in_dir)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        torchaudio.save(out_path, wav["fg_wav"], hp.wav_rate)
+    for batch in loader:
+        enhanced_wavs = ddp_model(batch["fg_wavs"])[0].cpu()
+        results.append(enhanced_wavs)
+        if len(results) >= batch_size:
+            with ThreadPoolExecutor(max_workers=4*world_size) as executor: # batch_size must be greater then 4*world_size
+                for enhanced_wav in enhanced_wavs:
+                    executor.submit(save,out_path,enhanced_wav,hp)
+            results = []
