@@ -12,7 +12,7 @@ from torchaudio.functional import resample
 from torchaudio.transforms import MelSpectrogram
 from tqdm import trange
 
-from data import create_dataloader
+from resemble_enhance.data import create_dataloader
 
 from .hparams import HParams
 
