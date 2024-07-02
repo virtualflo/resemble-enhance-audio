@@ -97,11 +97,11 @@ def main():
     if args.parallel_mode:
         if args.denoise_only:
             mp.spawn(parallel_denoise,
-                     args=(args.in_dir,out_path,"denoiser",args.batch_size,world_size, ),
+                     args=(args.in_dir,args.out_dir,"denoiser",args.batch_size,world_size, ),
                      nprocs = world_size)
         else:
             mp.spawn(parallel_enhance,
-                     args=(args.in_dir,out_path,"enhancer",args.batch_size,world_size, ),
+                     args=(args.in_dir,args.out_dir,"enhancer",args.batch_size,world_size, ),
                      nprocs = world_size)
     else:
         paths = sorted(args.in_dir.glob(f"**/*{args.suffix}"))
