@@ -49,7 +49,7 @@ def parallel_denoise(in_dir, out_path, mode, batch_size, device, world_size, run
 
 
 @torch.inference_mode()
-def parallel_enhance(in_dir, out_path, mode, batch_size, device, world_size, nfe=32, solver="midpoint", lambd=0.5, tau=0.5, run_dir=None):
+def parallel_enhance(device, in_dir, out_path, mode, batch_size, world_size, nfe=32, solver="midpoint", lambd=0.5, tau=0.5, run_dir=None):
     assert 0 < nfe <= 128, f"nfe must be in (0, 128], got {nfe}"
     assert solver in ("midpoint", "rk4", "euler"), f"solver must be in ('midpoint', 'rk4', 'euler'), got {solver}"
     assert 0 <= lambd <= 1, f"lambd must be in [0, 1], got {lambd}"

@@ -77,8 +77,8 @@ def main():
     
     args, _ = parser.parse_known_args()
 
-    if args.parallel_mode and (args.batch_size is None or args.world_size is None):
-        parser.error('--parallel_mode requires --batch_size and --world_size')
+    if args.parallel_mode and (args.batch_size is None):
+        parser.error('--parallel_mode requires --batch_size')
 
     args = parser.parse_args()
 
@@ -96,16 +96,12 @@ def main():
 
     if args.parallel_mode:
         if args.denoise_only:
-            def _denoise(rank,world_size):
-                return parallel_denoise(args.in_dir,out_path,"denoiser",args.batch_size,rank,world_size)
-            mp.spawn(_denoise,
-                     args=(world_size, ),
+            mp.spawn(parallel_denoise,
+                     args=(args.in_dir,out_path,"denoiser",args.batch_size,world_size, ),
                      nprocs = world_size)
         else:
-            def _enhance(rank,world_size):
-                return parallel_enhance(args.in_dir,out_path,"enhancer",args.batch_size,rank,world_size)
-            mp.spawn(_enhance,
-                     args=(world_size, ),
+            mp.spawn(parallel_enhance,
+                     args=(args.in_dir,out_path,"enhancer",args.batch_size,world_size, ),
                      nprocs = world_size)
     else:
         paths = sorted(args.in_dir.glob(f"**/*{args.suffix}"))
