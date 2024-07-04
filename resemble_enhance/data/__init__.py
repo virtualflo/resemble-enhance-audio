@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from ..hparams import HParams
 from ..utils import DistributedEvalSampler
 from .dataset import Dataset
+from .dataset import InferenceDataset
 from .utils import mix_fg_bg, rglob_audio_files
 
 logger = logging.getLogger(__name__)
@@ -27,12 +28,12 @@ def _create_datasets(hp: HParams, mode, val_size=10, seed=123):
     return train_ds, val_ds
 
 
-def _get_dataset(path, hp: HParams, mode, seed=123):
+def _get_dataset(path, sr, seed=123):
     paths = rglob_audio_files(path)
 
     random.Random(seed).shuffle(paths)
     
-    ds = Dataset(paths, hp, training=False,mode=mode)
+    ds = InferenceDataset(paths, sr)
     
     return ds
 
@@ -59,14 +60,13 @@ def create_dataloaders(hp: HParams, mode):
     return train_dl, val_dl
 
 
-def create_dataloader(in_dir, batch_size, mode, device, world_size):
-    ds = _get_dataset(path=in_dir, mode=mode)
-    _sampler = DistributedEvalSampler(ds, num_replicas=world_size, rank=device)
+def create_dataloader(in_dir, batch_size, sr, device, world_size):
+    ds = _get_dataset(path=in_dir, sr=sr)
+    distributed_sampler = DistributedEvalSampler(ds, num_replicas=world_size, rank=device)
     dl = DataLoader(
         ds,
         batch_size=batch_size,
-        shuffle=True,
-        sampler=_sampler,
+        sampler=distributed_sampler,
         collate_fn=ds.collate_fn
     )
     return dl

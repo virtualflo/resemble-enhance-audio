@@ -146,7 +146,6 @@ class Dataset(DatasetBase):
             bg_wav=bg_wav,
             fg_dwav=fg_dwav,
             bg_dwav=bg_dwav,
-            path = fg_path
         )
 
     def __getitem__(self, index: int):
@@ -169,5 +168,78 @@ class Dataset(DatasetBase):
             bg_wavs=_collate(batch, "bg_wav"),
             fg_dwavs=_collate(batch, "fg_dwav"),
             bg_dwavs=_collate(batch, "bg_dwav"),
-            paths = _collate(batch, "path"),
+        )
+
+
+class InferenceDataset(DatasetBase):
+    def __init__(
+        self,
+        in_dir: list[Path],
+        tgt_sr: int,
+        max_retries=100,
+        silent_fg_prob=0.01,
+    ):
+        super().__init__()
+
+        self.tgt_sr = tgt_sr
+        self.fg_paths = in_dir
+
+        if len(self.fg_paths) == 0:
+            raise ValueError(f"No audio files found in {in_dir}")
+
+        logger.info(f"Found {len(self.fg_paths)} audio files.")
+
+        self.max_retries = max_retries
+        self.silent_fg_prob = silent_fg_prob
+
+    def _load_wav(self, path):
+        wav, sr = torchaudio.load(path)
+
+        wav = AF.resample(
+            waveform=wav,
+            orig_freq=sr,
+            new_freq=self.tgt_sr,
+            lowpass_filter_width=64,
+            rolloff=0.9475937167399596,
+            resampling_method="sinc_interp_kaiser",
+            beta=14.769656459379492,
+        )
+
+        wav = wav.float().numpy()
+
+        if wav.ndim == 2:
+            wav = np.mean(wav, axis=0)
+
+        wav = _normalize(wav)
+
+        return wav
+
+    def _getitem_unsafe(self, index: int):
+        _path = self.fg_paths[index]
+
+        _audio = self._load_wav(_path)
+
+        return dict(
+            audio= _audio,
+            path = _path
+        )
+
+    def __getitem__(self, index: int):
+        for i in range(self.max_retries):
+            try:
+                return self._getitem_unsafe(index)
+            except Exception as e:
+                if i == self.max_retries - 1:
+                    raise RuntimeError(f"Failed to load {self.fg_paths[index]} after {self.max_retries} retries") from e
+                logger.debug(f"Error loading {self.fg_paths[index]}: {e}, skipping")
+                index = np.random.randint(0, len(self))
+
+    def __len__(self):
+        return len(self.fg_paths)
+
+    @staticmethod
+    def collate_fn(batch):
+        return dict(
+            audios= _collate(batch, "audio"),
+            paths = _collate(batch, "path", False, False),
         )

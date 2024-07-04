@@ -92,16 +92,25 @@ def main():
 
     start_time = time.perf_counter()
 
-    run_dir = args.run_dir
-
     if args.parallel_mode:
         if args.denoise_only:
             mp.spawn(parallel_denoise,
-                     args=(args.in_dir,args.out_dir,"denoiser",args.batch_size,world_size, ),
+                     args=(args.in_dir,
+                           args.out_dir,
+                           args.batch_size,
+                           world_size, ),
                      nprocs = world_size)
         else:
             mp.spawn(parallel_enhance,
-                     args=(args.in_dir,args.out_dir,"enhancer",args.batch_size,world_size, ),
+                     args=(args.in_dir,
+                           args.out_dir,
+                           args.batch_size,
+                           world_size,
+                           args.nfe,
+                           args.solver,
+                           args.lambd,
+                           args.tau,
+                           args.run_dir,     ),
                      nprocs = world_size)
     else:
         paths = sorted(args.in_dir.glob(f"**/*{args.suffix}"))
@@ -133,14 +142,14 @@ def main():
                     solver=args.solver,
                     lambd=args.lambd,
                     tau=args.tau,
-                    run_dir=run_dir,
+                    run_dir=args.run_dir,
                 )
             out_path.parent.mkdir(parents=True, exist_ok=True)
             torchaudio.save(out_path, hwav[None], sr)
 
     # Cool emoji effect saying the job is done
     elapsed_time = time.perf_counter() - start_time
-    print(f"🌟 Enhancement done! {len(paths)} files processed in {elapsed_time:.2f}s")
+    print(f"🌟 Enhancement done! All files processed in {elapsed_time:.2f}s")
 
 
 if __name__ == "__main__":

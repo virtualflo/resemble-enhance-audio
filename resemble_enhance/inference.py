@@ -169,23 +169,28 @@ def inference(model, dwav, sr, device, chunk_seconds: float = 30.0, overlap_seco
     return hwav, sr
 
 
+def save(in_dir,out_path,wav,sr):
+        out_path = out_path / wav['path'].relative_to(in_dir)
+        if out_path.exists():
+            return
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        torchaudio.save(out_path, wav["audio"], sr)
+
+
 @torch.inference_mode()
-def parallel_inference(model, in_dir, out_path, mode, batch_size, device, world_size):
+def parallel_inference(model, in_dir, out_path, batch_size, device, world_size):
     dist.init_process_group("nccl", rank=device, world_size=world_size)
     hp: HParams = model.hp
     ddp_model = DDP(model, device_ids=[device])
 
-    loader = create_dataloader(in_dir,batch_size,mode,device,world_size)
+    loader = create_dataloader(in_dir,batch_size,hp.wav_rate,device,world_size)
     results = []
-    def save(out_path,wav,hp):
-        out_path = out_path / wav['path'].relative_to(in_dir)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        torchaudio.save(out_path, wav["fg_wav"], hp.wav_rate)
+    
     for batch in loader:
-        enhanced_wavs = ddp_model(batch["fg_wavs"])[0].cpu()
+        enhanced_wavs = ddp_model(batch["audios"])[0].cpu()
         results.append(enhanced_wavs)
         if len(results) >= batch_size:
-            with ThreadPoolExecutor(max_workers=4*world_size) as executor: # batch_size must be greater then 4*world_size
+            with ThreadPoolExecutor(max_workers=world_size) as executor:
                 for enhanced_wav in enhanced_wavs:
-                    executor.submit(save,out_path,enhanced_wav,hp)
+                    executor.submit(save,in_dir,out_path,enhanced_wav,hp.wav_rate)
             results = []
