@@ -240,6 +240,6 @@ class InferenceDataset(DatasetBase):
     @staticmethod
     def collate_fn(batch):
         return dict(
-            audios= _collate(batch, "audio"),
+            audios= _collate(batch, "audio", True, False),
             paths = _collate(batch, "path", False, False),
         )
