@@ -4,8 +4,7 @@ import time
 import torch
 import torchaudio
 import torch.distributed as dist
-#from torch.nn.parallel import DistributedDataParallel as DDP
-#from concurrent.futures import ThreadPoolExecutor
+from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.nn.functional as F
 from torch.nn.utils.parametrize import remove_parametrizations
 from torchaudio.functional import resample
@@ -198,20 +197,11 @@ def inference_batch(model, audios, device, npad=441):
 def parallel_inference(model, in_dir, out_path, batch_size, device, world_size):
     dist.init_process_group("nccl", rank=device, world_size=world_size)
     hp: HParams = model.hp
-    #ddp_model = DDP(model, device_ids=[device])
+    ddp_model = DDP(model, device_ids=[device])
 
     loader = create_dataloader(in_dir,batch_size,hp.wav_rate,device,world_size)
-    #results = []
     
     for batch in loader:
-        enhanced_wavs = inference_batch(model,batch['audios'],device)
-        
+        enhanced_wavs = inference_batch(ddp_model,batch['audios'],device)
         for enhanced_wav,in_path in zip(enhanced_wavs,batch['paths']):
             save(in_dir,out_path,in_path,enhanced_wav,hp.wav_rate)
-        '''
-        results.append(enhanced_wavs)
-        if len(results) >= batch_size:
-            with ThreadPoolExecutor(max_workers=world_size) as executor:
-                for enhanced_wav,in_path in zip(enhanced_wavs,batch['paths']):
-                    executor.submit(save,in_dir,out_path,in_path,enhanced_wav,hp.wav_rate)
-            results = []'''
