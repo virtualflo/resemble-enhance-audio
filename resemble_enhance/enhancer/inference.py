@@ -43,7 +43,7 @@ def enhance(dwav, sr, device, nfe=32, solver="midpoint", lambd=0.5, tau=0.5, run
 
 
 @torch.inference_mode()
-def parallel_denoise(in_dir, out_path, mode, batch_size, device, world_size, run_dir=None):
+def parallel_denoise(device, in_dir, out_path, mode, batch_size, world_size, run_dir=None):
     enhancer = load_enhancer(run_dir, device)
     return parallel_inference(enhancer.denoiser, in_dir, out_path, mode, batch_size, device, world_size)
 
