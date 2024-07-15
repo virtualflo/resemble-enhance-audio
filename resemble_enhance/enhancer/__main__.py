@@ -91,6 +91,7 @@ def main():
     world_size = torch.cuda.device_count()
 
     start_time = time.perf_counter()
+    paths = sorted(args.in_dir.glob(f"**/*{args.suffix}"))
 
     if args.parallel_mode:
         if args.denoise_only:
@@ -113,8 +114,6 @@ def main():
                            args.run_dir,     ),
                      nprocs = world_size)
     else:
-        paths = sorted(args.in_dir.glob(f"**/*{args.suffix}"))
-
         if len(paths) == 0:
             print(f"No {args.suffix} files found in the following path: {args.in_dir}")
             return
@@ -149,7 +148,7 @@ def main():
 
     # Cool emoji effect saying the job is done
     elapsed_time = time.perf_counter() - start_time
-    print(f"🌟 Enhancement done! All files processed in {elapsed_time:.2f}s")
+    print(f"🌟 Enhancement done! {len(paths)} files processed in {elapsed_time:.2f}s")
 
 
 if __name__ == "__main__":

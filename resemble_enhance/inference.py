@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torch.nn.utils.parametrize import remove_parametrizations
 from torchaudio.functional import resample
 from torchaudio.transforms import MelSpectrogram
-from tqdm import trange
+from tqdm import trange, tqdm
 
 from resemble_enhance.data import create_dataloader
 
@@ -19,10 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 @torch.inference_mode()
-def inference_chunk(model, dwav, sr, device, npad=441):
-    assert model.hp.wav_rate == sr, f"Expected {model.hp.wav_rate} Hz, got {sr} Hz"
-    del sr
-
+def inference_chunk(model, dwav, device, npad=441):
     length = dwav.shape[-1]
     abs_max = dwav.abs().max().clamp(min=1e-7)
 
@@ -155,7 +152,7 @@ def inference(model, dwav, sr, device, chunk_seconds: float = 30.0, overlap_seco
 
     chunks = []
     for start in trange(0, dwav.shape[-1], hop_length):
-        chunks.append(inference_chunk(model, dwav[start : start + chunk_length], sr, device))
+        chunks.append(inference_chunk(model, dwav[start : start + chunk_length], device))
 
     hwav = merge_chunks(chunks, chunk_length, hop_length, sr=sr, length=dwav.shape[-1])
 
@@ -168,40 +165,27 @@ def inference(model, dwav, sr, device, chunk_seconds: float = 30.0, overlap_seco
     return hwav, sr
 
 
-def save(in_dir,out_path,in_path,wav,sr):
-        out_path = out_path / in_path.relative_to(in_dir)
-        if out_path.exists():
-            return
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        torchaudio.save(out_path, wav, sr)
-
-
-@torch.inference_mode()
-def inference_batch(model, audios, device, npad=441):
-    haudios = []
-    
-    for audio in audios:
-        length = audio.shape[-1]
-        abs_max = audio.abs().max().clamp(min=1e-7)
-        assert audio.dim() == 1, f"Expected 1D waveform, got {audio.dim()}D"
-        audio = audio.to(device)
-        audio = audio / abs_max  # Normalize
-        audio = F.pad(audio, (0, npad))
-        hwav = model(audio[None]).cpu()  # (T,)
-        hwav = hwav[:length]  # Trim padding
-        hwav = hwav * abs_max  # Unnormalize
-        haudios.append(hwav)
-    return haudios
-
-
 def parallel_inference(model, in_dir, out_path, batch_size, device, world_size):
     dist.init_process_group("nccl", rank=device, world_size=world_size)
+    remove_weight_norm_recursively(model)
     hp: HParams = model.hp
     ddp_model = DDP(model, device_ids=[device])
 
     loader = create_dataloader(in_dir,batch_size,hp.wav_rate,device,world_size)
     
     for batch in loader:
-        enhanced_wavs = inference_batch(ddp_model,batch['audios'],device)
-        for enhanced_wav,in_path in zip(enhanced_wavs,batch['paths']):
-            save(in_dir,out_path,in_path,enhanced_wav,hp.wav_rate)
+        pbar = tqdm(zip(batch["audios"],batch["paths"]))
+        for wav,in_path in pbar:
+            out_dir = out_path / in_path.relative_to(in_dir)
+            if out_dir.exists():
+                pbar.set_description(f"{out_dir} Already processed!!!")
+                continue
+            else:
+                start_time = time.perf_counter()
+                hwav = inference_chunk(ddp_model,wav,device)
+                pbar.set_description(f"Processing {out_dir}")
+                out_dir.parent.mkdir(parents=True, exist_ok=True)
+                torchaudio.save(out_dir, hwav[None], hp.wav_rate)
+                elapsed_time = time.perf_counter() - start_time
+                logger.info(f"Elapsed time: {elapsed_time:.3f} s, {hwav.shape[-1] / elapsed_time / 1000:.3f} kHz")
+        torch.cuda.empty_cache()
