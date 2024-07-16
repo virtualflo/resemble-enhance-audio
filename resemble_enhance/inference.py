@@ -180,12 +180,11 @@ def parallel_inference(model, in_dir, out_path, batch_size, device, world_size):
             if out_dir.exists():
                 pbar.set_description(f"{out_dir} Already processed!!!")
                 continue
-            else:
-                start_time = time.perf_counter()
-                hwav = inference_chunk(ddp_model,wav,device)
-                pbar.set_description(f"Processing {out_dir}")
-                out_dir.parent.mkdir(parents=True, exist_ok=True)
-                torchaudio.save(out_dir, hwav[None], hp.wav_rate)
-                elapsed_time = time.perf_counter() - start_time
-                logger.info(f"Elapsed time: {elapsed_time:.3f} s, {hwav.shape[-1] / elapsed_time / 1000:.3f} kHz")
+            start_time = time.perf_counter()
+            hwav = inference_chunk(ddp_model,wav,device)
+            pbar.set_description(f"Processing {out_dir}")
+            out_dir.parent.mkdir(parents=True, exist_ok=True)
+            torchaudio.save(out_dir, hwav[None], hp.wav_rate)
+            elapsed_time = time.perf_counter() - start_time
+            logger.info(f"Elapsed time: {elapsed_time:.3f} s, {hwav.shape[-1] / elapsed_time / 1000:.3f} kHz")
         torch.cuda.empty_cache()

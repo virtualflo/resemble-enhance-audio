@@ -122,6 +122,9 @@ def main():
 
         for path in pbar:
             out_path = args.out_dir / path.relative_to(args.in_dir)
+            if out_path.exists():
+                pbar.set_description(f"{out_path} Already processed!!!")
+                continue
             pbar.set_description(f"Processing {out_path}")
             dwav, sr = torchaudio.load(path)
             dwav = dwav.mean(0)
