@@ -27,7 +27,8 @@ def inference_chunk(model, dwav, device, npad=441):
     dwav = dwav.to(device)
     dwav = dwav / abs_max  # Normalize
     dwav = F.pad(dwav, (0, npad))
-    hwav = model(dwav[None])[0].cpu()  # (T,)
+    with torch.no_grad():
+        hwav = model(dwav[None])[0].cpu()  # (T,)
     hwav = hwav[:length]  # Trim padding
     hwav = hwav * abs_max  # Unnormalize
 

@@ -62,7 +62,7 @@ def create_dataloaders(hp: HParams, mode):
 
 def create_dataloader(in_dir, batch_size, sr, device, world_size):
     ds = _get_dataset(path=in_dir, sr=sr)
-    distributed_sampler = DistributedEvalSampler(ds, num_replicas=world_size, rank=device)
+    distributed_sampler = DistributedEvalSampler(ds, num_replicas=world_size, rank=device, shuffle=True)
     dl = DataLoader(
         ds,
         batch_size=batch_size,
