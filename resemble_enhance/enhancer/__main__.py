@@ -74,7 +74,13 @@ def main():
         type=int,
         help="Batch size per GPU for inference (only in parallel_mode)",
     )
-    
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Random seed for shuffling audio paths",
+    )
+
     args, _ = parser.parse_known_args()
 
     if args.parallel_mode and (args.batch_size is None):
@@ -99,7 +105,8 @@ def main():
                      args=(args.in_dir,
                            args.out_dir,
                            args.batch_size,
-                           world_size, ),
+                           world_size,
+                           args.seed,   ),
                      nprocs = world_size)
         else:
             mp.spawn(parallel_enhance,
@@ -111,7 +118,8 @@ def main():
                            args.solver,
                            args.lambd,
                            args.tau,
-                           args.run_dir,     ),
+                           args.run_dir,
+                           args.seed,   ),
                      nprocs = world_size)
     else:
         if len(paths) == 0:
