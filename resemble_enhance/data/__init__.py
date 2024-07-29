@@ -32,9 +32,9 @@ def _get_dataset(path, sr, seed=123):
     paths = rglob_audio_files(path)
 
     random.Random(seed).shuffle(paths)
-    
+
     ds = InferenceDataset(paths, sr)
-    
+
     return ds
 
 
@@ -60,9 +60,9 @@ def create_dataloaders(hp: HParams, mode):
     return train_dl, val_dl
 
 
-def create_dataloader(in_dir, batch_size, sr, device, world_size):
+def create_dataloader(in_dir, batch_size, sr, device, world_size, seed=0):
     ds = _get_dataset(path=in_dir, sr=sr)
-    distributed_sampler = DistributedEvalSampler(ds, num_replicas=world_size, rank=device, shuffle=True)
+    distributed_sampler = DistributedEvalSampler(ds, num_replicas=world_size, rank=device, shuffle=True, seed=seed)
     dl = DataLoader(
         ds,
         batch_size=batch_size,

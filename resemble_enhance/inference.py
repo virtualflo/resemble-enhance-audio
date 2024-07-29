@@ -166,14 +166,14 @@ def inference(model, dwav, sr, device, chunk_seconds: float = 30.0, overlap_seco
     return hwav, sr
 
 
-def parallel_inference(model, in_dir, out_path, batch_size, device, world_size):
+def parallel_inference(model, in_dir, out_path, batch_size, device, world_size,seed=0):
     dist.init_process_group("nccl", rank=device, world_size=world_size)
     remove_weight_norm_recursively(model)
     hp: HParams = model.hp
     ddp_model = DDP(model, device_ids=[device])
 
-    loader = create_dataloader(in_dir,batch_size,hp.wav_rate,device,world_size)
-    
+    loader = create_dataloader(in_dir,batch_size,hp.wav_rate,device,world_size,seed=seed)
+
     for batch in loader:
         pbar = tqdm(zip(batch["audios"],batch["paths"]))
         for wav,in_path in pbar:
