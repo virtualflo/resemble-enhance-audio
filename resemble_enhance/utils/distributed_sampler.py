@@ -85,6 +85,7 @@ class DistributedEvalSampler(Sampler):
         if self.shuffle:
             # deterministically shuffle based on epoch and seed
             g = torch.Generator()
+            print(self.seed, self.epoch)
             g.manual_seed(self.seed + self.epoch)
             indices = torch.randperm(len(self.dataset), generator=g).tolist()
         else:
