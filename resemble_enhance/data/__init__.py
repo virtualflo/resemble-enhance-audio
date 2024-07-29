@@ -28,7 +28,7 @@ def _create_datasets(hp: HParams, mode, val_size=10, seed=123):
     return train_ds, val_ds
 
 
-def _get_dataset(path, sr, seed=123):
+def _get_dataset(path, sr, seed):
     paths = rglob_audio_files(path)
 
     random.Random(seed).shuffle(paths)
@@ -60,8 +60,8 @@ def create_dataloaders(hp: HParams, mode):
     return train_dl, val_dl
 
 
-def create_dataloader(in_dir, batch_size, sr, device, world_size, seed=0):
-    ds = _get_dataset(path=in_dir, sr=sr)
+def create_dataloader(in_dir, batch_size, sr, device, world_size, seed):
+    ds = _get_dataset(path=in_dir, sr=sr, seed=seed)
     distributed_sampler = DistributedEvalSampler(ds, num_replicas=world_size, rank=device, shuffle=True, seed=seed)
     dl = DataLoader(
         ds,

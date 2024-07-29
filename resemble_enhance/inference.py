@@ -166,7 +166,7 @@ def inference(model, dwav, sr, device, chunk_seconds: float = 30.0, overlap_seco
     return hwav, sr
 
 
-def parallel_inference(model, in_dir, out_path, batch_size, device, world_size,seed=0):
+def parallel_inference(model, in_dir, out_path, batch_size, device, world_size, seed):
     dist.init_process_group("nccl", rank=device, world_size=world_size)
     remove_weight_norm_recursively(model)
     hp: HParams = model.hp
