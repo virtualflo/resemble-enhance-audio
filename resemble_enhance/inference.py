@@ -172,7 +172,7 @@ def parallel_inference(model, in_dir, out_path, batch_size, device, world_size,s
     hp: HParams = model.hp
     ddp_model = DDP(model, device_ids=[device])
 
-    loader = create_dataloader(in_dir,batch_size,hp.wav_rate,device,world_size,seed=0)
+    loader = create_dataloader(in_dir,batch_size,hp.wav_rate,device,world_size,seed=seed)
 
     for batch in loader:
         pbar = tqdm(zip(batch["audios"],batch["paths"]))
